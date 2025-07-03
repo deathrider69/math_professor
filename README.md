@@ -1,9 +1,9 @@
 
 # Final Proposal: Math Professor Agent
 
-## Working Demonstration
+## Proposal & Working Demonstration
 
-[Link Text](https://drive.google.com/drive/u/0/folders/1JFEr_-VogikcAC7vH556gtFE0dIIVYcE)
+[Drive link: Proposal and Working Demo](https://drive.google.com/drive/u/0/folders/1JFEr_-VogikcAC7vH556gtFE0dIIVYcE)
 
 ---
 
