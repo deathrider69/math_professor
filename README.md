@@ -1,6 +1,12 @@
 
 # Final Proposal: Math Professor Agent
 
+## Working Demonstration
+
+[Link Text](https://drive.google.com/drive/u/0/folders/1JFEr_-VogikcAC7vH556gtFE0dIIVYcE)
+
+---
+
 ## Input and Output Guardrails
 
 Guardrails have been implemented to monitor the user input and control the agentic system’s output.
@@ -132,8 +138,4 @@ The Math Professor Agent integrates multiple layers of:
 
 Together, these components create a reliable, secure, and accurate mathematical problem-solving system.
 
-##Working Demonstration
-
-[Link Text](https://drive.google.com/drive/u/0/folders/1JFEr_-VogikcAC7vH556gtFE0dIIVYcE)
-
----
+--- 
