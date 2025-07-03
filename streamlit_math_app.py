@@ -38,6 +38,16 @@ st.markdown("""
         border-radius: 10px;
         border-left: 4px solid #1f77b4;
         margin: 1rem 0;
+        color: #000000;
+    }
+    
+    .solution-box h4 {
+        color: #000000;
+        margin-bottom: 0.5rem;
+    }
+    
+    .solution-box p {
+        color: #000000;
     }
     
     .feedback-box {
@@ -46,6 +56,16 @@ st.markdown("""
         border-radius: 10px;
         border-left: 4px solid #ffc107;
         margin: 1rem 0;
+        color: #000000;
+    }
+    
+    .feedback-box h4 {
+        color: #000000;
+        margin-bottom: 0.5rem;
+    }
+    
+    .feedback-box p {
+        color: #000000;
     }
     
     .confidence-high {
@@ -68,6 +88,7 @@ st.markdown("""
         padding: 0.25rem 0.5rem;
         border-radius: 5px;
         font-size: 0.8rem;
+        color: #000000;
     }
     
     .source-web {
@@ -75,6 +96,7 @@ st.markdown("""
         padding: 0.25rem 0.5rem;
         border-radius: 5px;
         font-size: 0.8rem;
+        color: #000000;
     }
     
     .source-solver {
@@ -82,6 +104,7 @@ st.markdown("""
         padding: 0.25rem 0.5rem;
         border-radius: 5px;
         font-size: 0.8rem;
+        color: #000000;
     }
     
     .source-feedback {
@@ -89,6 +112,7 @@ st.markdown("""
         padding: 0.25rem 0.5rem;
         border-radius: 5px;
         font-size: 0.8rem;
+        color: #000000;
     }
 </style>
 """, unsafe_allow_html=True)
@@ -125,7 +149,7 @@ def get_source_class(source: str) -> str:
 def format_solution_display(result: Dict[str, Any]) -> None:
     """Format and display solution result"""
     if not result.get('success', False):
-        st.error(f"❌ Error: {result.get('error', 'Unknown error')}")
+        st.error(f"Error: {result.get('error', 'Unknown error')}")
         return
     
     confidence = result.get('confidence', 0.0)
@@ -157,24 +181,24 @@ def format_solution_display(result: Dict[str, Any]) -> None:
     
     # Final answer
     if result.get('answer'):
-        st.markdown(f"**🎯 Final Answer:** `{result.get('answer')}`")
+        st.markdown(f"**Final Answer:** `{result.get('answer')}`")
     
     # Reasoning
     if result.get('reasoning'):
-        st.markdown(f"**💡 Reasoning:** {result.get('reasoning')}")
+        st.markdown(f"**Reasoning:** {result.get('reasoning')}")
     
     # Feedback indicator
     if result.get('requires_feedback', False):
         st.markdown("""
         <div class="feedback-box">
-            <h4>🔄 Human Feedback Recommended</h4>
+            <h4>Human Feedback Recommended</h4>
             <p>This solution would benefit from human validation. Please provide feedback below.</p>
         </div>
         """, unsafe_allow_html=True)
 
 def display_analytics_dashboard():
     """Display analytics dashboard"""
-    st.subheader("📊 Analytics Dashboard")
+    st.subheader("Analytics Dashboard")
     
     if not st.session_state.solution_history:
         st.info("No solutions processed yet. Solve some math problems to see analytics!")
@@ -238,7 +262,7 @@ def main():
     
     # Sidebar
     with st.sidebar:
-        st.header("🔧 System Controls")
+        st.header("System Controls")
         
         # Navigation
         page = st.selectbox(
@@ -315,7 +339,7 @@ def main():
                 feedback_submit = st.form_submit_button("📤 Submit Feedback")
             
             if feedback_submit and feedback.strip():
-                with st.spinner("🔄 Processing feedback..."):
+                with st.spinner("Processing feedback..."):
                     feedback_result = st.session_state.orchestrator.submit_feedback(
                         st.session_state.current_solution_id,
                         feedback
@@ -325,7 +349,7 @@ def main():
                         st.success("Feedback processed successfully!")
                         st.markdown(f"""
                         <div class="solution-box">
-                            <h4>🔄 Improved Solution:</h4>
+                            <h4>Improved Solution:</h4>
                             {feedback_result.get('improved_solution', 'No improvement available')}
                         </div>
                         """, unsafe_allow_html=True)
@@ -335,7 +359,7 @@ def main():
                         st.error(f"Error processing feedback: {feedback_result.get('error', 'Unknown error')}")
     
     elif page == "Solution History":
-        st.header("📚 Solution History")
+        st.header("Solution History")
         
         if not st.session_state.solution_history:
             st.info("No solutions in history yet.")
