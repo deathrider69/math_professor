@@ -1,250 +1,325 @@
 import os
-import logging
-from typing import Dict, Any, Optional
+import sys
+from typing import Dict, Any, Optional, Tuple
 from dataclasses import dataclass
-import json
-
-# CrewAI imports
-import crewai
-from crewai import Agent, Task, Crew, Process
-from crewai.tools import BaseTool
-from langchain_google_genai import ChatGoogleGenerativeAI
-import google.generativeai as genai
-from pydantic import PrivateAttr
-
-# DSPy for human-in-the-loop
+from enum import Enum
+import logging
 import dspy
+from datetime import datetime
 
-# Import existing components
+# Add parent directory to path for imports
+sys.path.append(os.path.join(os.path.dirname(__file__), '..'))
+
 from src.guardrails.input_guardrails import MathInputGuardrails
 from src.guardrails.output_guardrails import MathOutputGuardrails
 from src.knowledge_base.agentic_rag_kb import AIMOKnowledgeBaseComponent
 from src.web_search.math_web_search import MathWebSearchComponent
 from src.solver.deepseek_solver import MathProblemSolver
 
-# Load environment variables early
-genai.configure(api_key=os.getenv("GEMINI_API_KEY"))
-llm = ChatGoogleGenerativeAI(
-    model="gemini-1.5-flash",
-    google_api_key=os.getenv("GEMINI_API_KEY"),
-    temperature=0.1
-)
-dspy.configure(lm=llm)
+# Configure logging
+logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger(__name__)
+
+class SolutionSource(Enum):
+    KNOWLEDGE_BASE = "knowledge_base"
+    WEB_SEARCH = "web_search"
+    SOLVER = "solver"
+    HUMAN_FEEDBACK = "human_feedback"
 
 @dataclass
-class MathSolutionResponse:
-    """Standardized response format for math solutions"""
+class MathSolution:
+    """Data class to represent a math solution"""
     solution: str
     answer: str
-    source: str
     confidence: float
-    requires_human_feedback: bool = False
-    feedback_received: Optional[str] = None
-
-class MathKnowledgeBaseTool(BaseTool):
-    name: str = "math_knowledge_base"
-    description: str = "Search the mathematical knowledge base for existing solutions"
-    _kb_component: AIMOKnowledgeBaseComponent = PrivateAttr()
-
-    def __init__(self):
-        super().__init__()
-        self._kb_component = AIMOKnowledgeBaseComponent()
-        self._kb_component.initialize_knowledge_base()
-
-    def _run(self, query: str):
-        result = self._kb_component.query(query)
-        return {
-            "success": result.get("is_present", False),
-            "data": result,
-            "source": "knowledge_base"
-        }
-
-class MathWebSearchTool(BaseTool):
-    name: str = "math_web_search"
-    description: str = "Search the web for mathematical solutions when not found in knowledge base"
-    _search_component: MathWebSearchComponent = PrivateAttr()
-
-    def __init__(self):
-        super().__init__()
-        self._search_component = MathWebSearchComponent()
-
-    def _run(self, query: str):
-        result = self._search_component.search_math_query(query)
-        return {
-            "success": result.is_found,
-            "data": {"solution": result.solution, "answer": result.answer} if result.is_found else None,
-            "source": "web_search"
-        }
-
-class MathSolverTool(BaseTool):
-    name: str = "math_solver"
-    description: str = "Solve mathematical problems using AI when other sources fail"
-    _solver_component: MathProblemSolver = PrivateAttr()
-
-    def __init__(self):
-        super().__init__()
-        self._solver_component = MathProblemSolver()
-
-    def _run(self, query: str):
-        result = self._solver_component.solve_math_problem(query)
-        return {
-            "success": result.get("calculated", False),
-            "data": result,
-            "source": "ai_solver"
-        }
+    source: SolutionSource
+    reasoning: str
+    requires_feedback: bool = False
+    feedback_history: list = None
+    
+    def __post_init__(self):
+        if self.feedback_history is None:
+            self.feedback_history = []
 
 class HumanFeedbackSignature(dspy.Signature):
+    """DSPy signature for human feedback processing"""
     original_solution = dspy.InputField(desc="The original mathematical solution")
     human_feedback = dspy.InputField(desc="Human feedback on the solution")
     improved_solution = dspy.OutputField(desc="Improved solution based on feedback")
+    confidence_score = dspy.OutputField(desc="Confidence score for the improved solution")
 
-class MathAgentOrchestrator:
+class FeedbackProcessor(dspy.Module):
+    """DSPy module for processing human feedback"""
+    
     def __init__(self):
-        self.setup_logging()
-        self.llm = llm
-        self.setup_guardrails()
-        self.setup_tools()
-        self.setup_agents()
-        self.feedback_module = dspy.ChainOfThought(HumanFeedbackSignature)
-        self.feedback_history = []
-
-    def setup_logging(self):
-        logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(name)s - %(levelname)s - %(message)s')
-        self.logger = logging.getLogger(__name__)
-
-    def setup_guardrails(self):
-        self.input_guardrails = MathInputGuardrails()
-        self.output_guardrails = MathOutputGuardrails()
-
-    def setup_tools(self):
-        self.knowledge_base_tool = MathKnowledgeBaseTool()
-        self.web_search_tool = MathWebSearchTool()
-        self.solver_tool = MathSolverTool()
-
-    def setup_agents(self):
-        self.kb_agent = Agent(
-            role="Mathematical Knowledge Base Specialist",
-            goal="Search and retrieve solutions from the mathematical knowledge base",
-            backstory="You are an expert at finding relevant mathematical solutions from existing knowledge bases.",
-            tools=[self.knowledge_base_tool],
-            llm=self.llm,
-            verbose=True
-        )
-
-        self.search_agent = Agent(
-            role="Mathematical Research Specialist",
-            goal="Find mathematical solutions through web search",
-            backstory="You are skilled at finding accurate mathematical solutions online.",
-            tools=[self.web_search_tool],
-            llm=self.llm,
-            verbose=True
-        )
-
-        self.solver_agent = Agent(
-            role="Mathematical Problem Solver",
-            goal="Solve mathematical problems step-by-step",
-            backstory="You are a mathematical genius capable of solving complex problems.",
-            tools=[self.solver_tool],
-            llm=self.llm,
-            verbose=True
-        )
-
-        self.coordinator_agent = Agent(
-            role="Mathematical Solution Coordinator",
-            goal="Coordinate the solution process and ensure quality responses",
-            backstory="You manage the mathematical solution pipeline.",
-            llm=self.llm,
-            verbose=True
-        )
-
-    def process_query(self, query: str) -> Dict[str, Any]:
-        self.logger.info(f"Processing query: {query}")
-
-        guardrail_result = self.input_guardrails.process_query(query)
-        if not guardrail_result['should_process']:
-            return {"success": False, "error": guardrail_result['error_message'], "stage": "input_guardrails"}
-
-        sanitized_query = guardrail_result['sanitized_query']
-        tasks = self.create_solution_tasks(sanitized_query)
-
-        crew = Crew(
-            agents=[self.kb_agent, self.search_agent, self.solver_agent, self.coordinator_agent],
-            tasks=tasks,
-            process=Process.sequential,
-            verbose=True
-        )
-
+        super().__init__()
+        self.feedback_chain = dspy.ChainOfThought(HumanFeedbackSignature)
+    
+    def forward(self, original_solution: str, human_feedback: str) -> Dict[str, Any]:
+        """Process human feedback and improve solution"""
         try:
-            result = crew.kickoff()
-            processed_result = self.process_crew_result(result)
-
-            if processed_result['success']:
-                cleaned_solution = self.output_guardrails.clean_and_format(processed_result['solution'])
-                processed_result['solution'] = cleaned_solution
-
-            return processed_result
-
-        except Exception as e:
-            self.logger.error(f"Crew execution failed: {str(e)}")
-            return {"success": False, "error": f"Solution generation failed: {str(e)}", "stage": "crew_execution"}
-
-    def create_solution_tasks(self, query: str) -> list:
-        return [
-            Task(description=f"Search the mathematical knowledge base for solutions to: {query}", expected_output="Dictionary with solution status", agent=self.kb_agent),
-            Task(description=f"If knowledge base search fails, search the web for solutions to: {query}", expected_output="Web search results if needed", agent=self.search_agent),
-            Task(description=f"If both fail, solve the problem: {query}", expected_output="AI-generated step-by-step solution", agent=self.solver_agent),
-            Task(description="Coordinate the solution process and provide the best response", expected_output="Final solution with source info", agent=self.coordinator_agent)
-        ]
-
-    def process_crew_result(self, crew_result) -> Dict[str, Any]:
-        try:
-            solution_data = self.parse_solution_string(crew_result) if isinstance(crew_result, str) else crew_result
+            result = self.feedback_chain(
+                original_solution=original_solution,
+                human_feedback=human_feedback
+            )
+            
             return {
-                "success": True,
-                "solution": solution_data.get("solution", ""),
-                "answer": solution_data.get("answer", ""),
-                "source": solution_data.get("source", "unknown"),
-                "confidence": solution_data.get("confidence", 0.5),
-                "requires_human_feedback": solution_data.get("confidence", 0.5) < 0.8
+                "improved_solution": result.improved_solution,
+                "confidence": float(result.confidence_score) if result.confidence_score.replace('.', '').isdigit() else 0.8,
+                "processed": True
             }
         except Exception as e:
-            return {"success": False, "error": f"Failed to process crew result: {str(e)}"}
+            logger.error(f"Error processing feedback: {str(e)}")
+            return {
+                "improved_solution": original_solution,
+                "confidence": 0.5,
+                "processed": False
+            }
 
-    def parse_solution_string(self, solution_str: str) -> Dict[str, Any]:
+class MathAgentOrchestrator:
+    """Main orchestrator for the mathematical professor system"""
+    
+    def __init__(self):
+        # Initialize components
+        self.input_guardrails = MathInputGuardrails()
+        self.output_guardrails = MathOutputGuardrails()
+        self.knowledge_base = AIMOKnowledgeBaseComponent()
+        self.web_search = MathWebSearchComponent()
+        self.solver = MathProblemSolver()
+        self.feedback_processor = FeedbackProcessor()
+        
+        # Initialize knowledge base
+        self.knowledge_base.initialize_knowledge_base()
+        
+        # Solution cache for feedback processing
+        self.solution_cache: Dict[str, MathSolution] = {}
+        
+        logger.info("MathAgentOrchestrator initialized successfully")
+    
+    def _generate_solution_id(self, query: str) -> str:
+        """Generate unique ID for solution tracking"""
+        return f"sol_{hash(query + str(datetime.now()))}"
+    
+    def _check_knowledge_base(self, query: str) -> Tuple[bool, Optional[MathSolution]]:
+        """Check knowledge base for existing solution"""
+        try:
+            kb_result = self.knowledge_base.query(query)
+            
+            if kb_result.get('is_present', False):
+                solution = MathSolution(
+                    solution=kb_result.get('solution', ''),
+                    answer=kb_result.get('answer', ''),
+                    confidence=0.9,
+                    source=SolutionSource.KNOWLEDGE_BASE,
+                    reasoning="Found in knowledge base"
+                )
+                return True, solution
+            
+            return False, None
+            
+        except Exception as e:
+            logger.error(f"Knowledge base query error: {str(e)}")
+            return False, None
+    
+    def _perform_web_search(self, query: str) -> Optional[MathSolution]:
+        """Perform web search for solution"""
+        try:
+            search_result = self.web_search.search_math_query(query)
+            
+            if search_result.get('is_found', False):
+                solution = MathSolution(
+                    solution=search_result.get('solution', ''),
+                    answer=str(search_result.get('answer', '')),
+                    confidence=0.7,
+                    source=SolutionSource.WEB_SEARCH,
+                    reasoning="Found through web search"
+                )
+                return solution
+            
+            return None
+            
+        except Exception as e:
+            logger.error(f"Web search error: {str(e)}")
+            return None
+    
+    def _use_solver(self, query: str) -> Optional[MathSolution]:
+        """Use internal solver as fallback"""
+        try:
+            solver_result = self.solver.solve_math_problem(query)
+            
+            if solver_result.get('calculated', False):
+                solution = MathSolution(
+                    solution=solver_result.get('solution', ''),
+                    answer=solver_result.get('answer', ''),
+                    confidence=0.8,
+                    source=SolutionSource.SOLVER,
+                    reasoning="Generated by internal solver"
+                )
+                return solution
+            
+            return None
+            
+        except Exception as e:
+            logger.error(f"Solver error: {str(e)}")
+            return None
+    
+    def _should_request_feedback(self, solution: MathSolution) -> bool:
+        """Determine if human feedback is needed"""
+        # Request feedback for low confidence solutions or complex problems
+        if solution.confidence < 0.6:
+            return True
+        
+        # Check for complex mathematical concepts that benefit from human validation
+        complex_keywords = [
+            'theorem', 'proof', 'integral', 'derivative', 'limit',
+            'differential', 'topology', 'abstract', 'group theory'
+        ]
+        
+        if any(keyword in solution.solution.lower() for keyword in complex_keywords):
+            return True
+        
+        return False
+    
+    def process_query(self, query: str) -> Dict[str, Any]:
+        """Main processing pipeline"""
+        # Step 1: Input validation through guardrails
+        guardrail_result = self.input_guardrails.process_query(query)
+        
+        if not guardrail_result.get('should_process', False):
+            return {
+                'success': False,
+                'error': guardrail_result.get('error_message', 'Invalid query'),
+                'solution_id': None
+            }
+        
+        sanitized_query = guardrail_result.get('sanitized_query', query)
+        solution_id = self._generate_solution_id(sanitized_query)
+        
+        # Step 2: Check knowledge base
+        kb_found, kb_solution = self._check_knowledge_base(sanitized_query)
+        
+        if kb_found and kb_solution:
+            final_solution = kb_solution
+        else:
+            # Step 3: Web search
+            web_solution = self._perform_web_search(sanitized_query)
+            
+            if web_solution:
+                final_solution = web_solution
+            else:
+                # Step 4: Use internal solver
+                solver_solution = self._use_solver(sanitized_query)
+                
+                if solver_solution:
+                    final_solution = solver_solution
+                else:
+                    return {
+                        'success': False,
+                        'error': 'Unable to find or generate solution',
+                        'solution_id': solution_id
+                    }
+        
+        # Step 5: Determine if feedback is needed
+        final_solution.requires_feedback = self._should_request_feedback(final_solution)
+        
+        # Step 6: Apply output guardrails
+        formatted_solution = self.output_guardrails.clean_and_format(final_solution.solution)
+        final_solution.solution = formatted_solution
+        
+        # Cache solution for potential feedback
+        self.solution_cache[solution_id] = final_solution
+        
         return {
-            "solution": solution_str,
-            "answer": "See solution",
-            "source": "crew_ai",
-            "confidence": 0.7
+            'success': True,
+            'solution_id': solution_id,
+            'solution': final_solution.solution,
+            'answer': final_solution.answer,
+            'confidence': final_solution.confidence,
+            'source': final_solution.source.value,
+            'reasoning': final_solution.reasoning,
+            'requires_feedback': final_solution.requires_feedback
+        }
+    
+    def submit_feedback(self, solution_id: str, feedback: str) -> Dict[str, Any]:
+        """Process human feedback for a solution"""
+        if solution_id not in self.solution_cache:
+            return {
+                'success': False,
+                'error': 'Solution not found in cache'
+            }
+        
+        original_solution = self.solution_cache[solution_id]
+        
+        # Process feedback using DSPy
+        feedback_result = self.feedback_processor.forward(
+            original_solution.solution,
+            feedback
+        )
+        
+        if feedback_result.get('processed', False):
+            # Create improved solution
+            improved_solution = MathSolution(
+                solution=feedback_result['improved_solution'],
+                answer=original_solution.answer,
+                confidence=feedback_result['confidence'],
+                source=SolutionSource.HUMAN_FEEDBACK,
+                reasoning=f"Improved based on feedback: {feedback}",
+                requires_feedback=False,
+                feedback_history=original_solution.feedback_history + [feedback]
+            )
+            
+            # Update cache
+            self.solution_cache[solution_id] = improved_solution
+            
+            return {
+                'success': True,
+                'improved_solution': improved_solution.solution,
+                'confidence': improved_solution.confidence,
+                'feedback_incorporated': True
+            }
+        
+        return {
+            'success': False,
+            'error': 'Failed to process feedback'
+        }
+    
+    def get_solution_history(self, solution_id: str) -> Dict[str, Any]:
+        """Get solution history including feedback"""
+        if solution_id not in self.solution_cache:
+            return {
+                'success': False,
+                'error': 'Solution not found'
+            }
+        
+        solution = self.solution_cache[solution_id]
+        
+        return {
+            'success': True,
+            'solution': solution.solution,
+            'answer': solution.answer,
+            'confidence': solution.confidence,
+            'source': solution.source.value,
+            'feedback_history': solution.feedback_history,
+            'requires_feedback': solution.requires_feedback
         }
 
-    def incorporate_human_feedback(self, solution: str, feedback: str) -> str:
-        try:
-            improved_solution = self.feedback_module(original_solution=solution, human_feedback=feedback)
-            self.feedback_history.append({"original": solution, "feedback": feedback, "improved": improved_solution.improved_solution})
-            return improved_solution.improved_solution
-        except Exception as e:
-            self.logger.error(f"Failed to incorporate feedback: {str(e)}")
-            return solution
-
-    def get_feedback_history(self) -> list:
-        return self.feedback_history
-
-    def health_check(self) -> Dict[str, Any]:
-        status = {"guardrails": "healthy", "knowledge_base": "healthy", "web_search": "healthy", "solver": "healthy", "llm": "healthy", "overall": "healthy"}
-        try:
-            test_query = "What is 2+2?"
-            if not self.input_guardrails.process_query(test_query)['should_process']:
-                status["guardrails"] = "error"
-            if not self.knowledge_base_tool._run(test_query).get("success"):
-                status["knowledge_base"] = "error"
-            if not self.web_search_tool._run(test_query).get("success"):
-                status["web_search"] = "error"
-            if not self.solver_tool._run(test_query).get("success"):
-                status["solver"] = "error"
-        except Exception as e:
-            self.logger.error(f"Health check failed: {str(e)}")
-            status["overall"] = "error"
-        if any(v == "error" for v in status.values() if v != "overall"):
-            status["overall"] = "degraded"
-        return status
+# Example usage and testing
+if __name__ == "__main__":
+    # Initialize orchestrator
+    orchestrator = MathAgentOrchestrator()
+    
+    # Test query
+    test_query = "Solve the quadratic equation x^2 + 5x + 6 = 0"
+    
+    # Process query
+    result = orchestrator.process_query(test_query)
+    print("Processing Result:", result)
+    
+    # Test feedback if needed
+    if result.get('requires_feedback', False):
+        feedback = "Please provide more detailed explanation of the factoring step"
+        feedback_result = orchestrator.submit_feedback(
+            result['solution_id'], 
+            feedback
+        )
+        print("Feedback Result:", feedback_result)

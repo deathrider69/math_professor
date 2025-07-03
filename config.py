@@ -1,93 +1,72 @@
-# config.py
 import os
-from dataclasses import dataclass
-from typing import Optional
-from dotenv import load_dotenv
+from typing import Dict, Any
 
-# Load environment variables
-load_dotenv()
-
-@dataclass
-class AgentConfig:
-    """Configuration for individual agents"""
-    temperature: float = 0.1
-    max_tokens: int = 2000
-    timeout: int = 30
-    retry_attempts: int = 3
-
-@dataclass
-class SystemConfig:
-    """Main system configuration"""
+class MathAgentConfig:
+    """Configuration class for Math Agent system"""
     
     # API Configuration
-    gemini_api_key: str = os.getenv('GEMINI_API_KEY')
+    DEEPSEEK_API_KEY = os.getenv("DEEPSEEK_API_KEY", "")
+    SEARCH_API_KEY = os.getenv("SEARCH_API_KEY", "")
     
     # Model Configuration
-    model_name: str = "gemini-1.5-flash"
-    
-    # Agent Configuration
-    agent_config: AgentConfig = AgentConfig()
+    DEFAULT_MODEL = "deepseek-chat"
+    MAX_TOKENS = 4096
+    TEMPERATURE = 0.1
     
     # Knowledge Base Configuration
-    kb_similarity_threshold: float = 0.8
-    kb_max_results: int = 5
+    KB_EMBEDDING_MODEL = "all-MiniLM-L6-v2"
+    KB_SIMILARITY_THRESHOLD = 0.7
+    KB_MAX_RESULTS = 5
     
     # Web Search Configuration
-    web_search_enabled: bool = True
-    web_search_timeout: int = 10
+    SEARCH_TIMEOUT = 10
+    MAX_SEARCH_RESULTS = 10
     
-    # Solver Configuration
-    solver_fallback_enabled: bool = True
+    # Feedback Configuration
+    FEEDBACK_CONFIDENCE_THRESHOLD = 0.6
+    MAX_FEEDBACK_ITERATIONS = 3
     
-    # Human Feedback Configuration
-    feedback_confidence_threshold: float = 0.8
-    feedback_storage_enabled: bool = True
+    # Guardrails Configuration
+    INPUT_MAX_LENGTH = 2000
+    OUTPUT_MAX_LENGTH = 8000
     
-    # Logging Configuration
-    log_level: str = "INFO"
-    log_file: str = "math_agent.log"
+    # Cache Configuration
+    SOLUTION_CACHE_SIZE = 1000
+    CACHE_TTL_HOURS = 24
     
     # Streamlit Configuration
-    streamlit_title: str = "Mathematical AI Professor"
-    streamlit_icon: str = "🧮"
-    max_query_history: int = 100
+    STREAMLIT_CONFIG = {
+        "theme": {
+            "primaryColor": "#1f77b4",
+            "backgroundColor": "#ffffff",
+            "secondaryBackgroundColor": "#f0f2f6",
+            "textColor": "#262730"
+        },
+        "server": {
+            "port": 8501,
+            "enableCORS": False,
+            "enableXsrfProtection": False
+        }
+    }
     
-    # Performance Configuration
-    enable_caching: bool = True
-    cache_ttl: int = 3600  # 1 hour
+    @classmethod
+    def get_dspy_config(cls) -> Dict[str, Any]:
+        """Get DSPy configuration"""
+        return {
+            "max_tokens": cls.MAX_TOKENS,
+            "temperature": cls.TEMPERATURE,
+            "model": cls.DEFAULT_MODEL
+        }
     
-    def validate(self) -> bool:
-        """Validate configuration"""
-        if not self.gemini_api_key:
-            raise ValueError("GEMINI_API_KEY is required")
+    @classmethod
+    def validate_config(cls) -> bool:
+        """Validate configuration settings"""
+        required_vars = []
         
-        if self.agent_config.temperature < 0 or self.agent_config.temperature > 1:
-            raise ValueError("Temperature must be between 0 and 1")
+        missing_vars = [var for var in required_vars if not getattr(cls, var)]
         
-        if self.kb_similarity_threshold < 0 or self.kb_similarity_threshold > 1:
-            raise ValueError("Similarity threshold must be between 0 and 1")
+        if missing_vars:
+            print(f"Warning: Missing configuration variables: {missing_vars}")
+            return False
         
         return True
-
-# Global configuration instance
-config = SystemConfig()
-
-# Environment-specific configurations
-class DevelopmentConfig(SystemConfig):
-    """Development environment configuration"""
-    log_level: str = "DEBUG"
-    enable_caching: bool = False
-    agent_config: AgentConfig = AgentConfig(temperature=0.2)
-
-class ProductionConfig(SystemConfig):
-    """Production environment configuration"""
-    log_level: str = "WARNING"
-    enable_caching: bool = True
-    agent_config: AgentConfig = AgentConfig(temperature=0.1)
-
-def get_config(environment: str = "development") -> SystemConfig:
-    """Get configuration based on environment"""
-    if environment.lower() == "production":
-        return ProductionConfig()
-    else:
-        return DevelopmentConfig()
