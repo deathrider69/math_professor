@@ -249,20 +249,20 @@ def main():
         st.markdown("---")
         
         # System info
-        st.subheader("ℹ️ System Info")
+        st.subheader("System Info")
         st.markdown(f"**Sessions:** {len(st.session_state.solution_history)}")
         if st.session_state.current_solution_id:
             st.markdown(f"**Current Solution:** `{st.session_state.current_solution_id}`")
         
         # Clear history
-        if st.button("🗑️ Clear History"):
+        if st.button("Clear History"):
             st.session_state.solution_history = []
             st.session_state.current_solution_id = None
             st.success("History cleared!")
     
     # Main content based on selected page
     if page == "Solve Problems":
-        st.header("🤔 Problem Solving")
+        st.header("Problem Solving")
         
         # Input form
         with st.form("math_problem_form"):
@@ -274,14 +274,14 @@ def main():
             
             col1, col2 = st.columns([1, 4])
             with col1:
-                submit = st.form_submit_button("🚀 Solve Problem")
+                submit = st.form_submit_button("Solve Problem")
             with col2:
                 if submit and not problem.strip():
                     st.error("Please enter a mathematical problem!")
         
         # Process problem
         if submit and problem.strip():
-            with st.spinner("🔍 Processing your problem..."):
+            with st.spinner("Processing your problem..."):
                 result = st.session_state.orchestrator.process_query(problem)
                 
                 # Store in history
@@ -303,7 +303,7 @@ def main():
         # Feedback section
         if st.session_state.current_solution_id:
             st.markdown("---")
-            st.subheader("💬 Provide Feedback")
+            st.subheader("Provide Feedback")
             
             with st.form("feedback_form"):
                 feedback = st.text_area(
@@ -322,7 +322,7 @@ def main():
                     )
                     
                     if feedback_result.get('success', False):
-                        st.success("✅ Feedback processed successfully!")
+                        st.success("Feedback processed successfully!")
                         st.markdown(f"""
                         <div class="solution-box">
                             <h4>🔄 Improved Solution:</h4>
@@ -332,7 +332,7 @@ def main():
                         
                         st.markdown(f"**New Confidence:** {feedback_result.get('confidence', 0.0):.1%}")
                     else:
-                        st.error(f"❌ Error processing feedback: {feedback_result.get('error', 'Unknown error')}")
+                        st.error(f"Error processing feedback: {feedback_result.get('error', 'Unknown error')}")
     
     elif page == "Solution History":
         st.header("📚 Solution History")
@@ -349,7 +349,7 @@ def main():
                 with col1:
                     st.markdown(f"**Problem:** {entry['problem']}")
                     st.markdown(f"**Timestamp:** {entry['timestamp'].strftime('%Y-%m-%d %H:%M:%S')}")
-                    st.markdown(f"**Success:** {'✅' if entry['success'] else '❌'}")
+                    st.markdown(f"**Success:** {'Successful' if entry['success'] else 'Failure'}")
                 
                 with col2:
                     st.markdown(f"**Confidence:** {entry['confidence']:.1%}")
@@ -366,18 +366,18 @@ def main():
         display_analytics_dashboard()
     
     elif page == "System Status":
-        st.header("⚙️ System Status")
+        st.header("System Status")
         
         # Component status
         st.subheader("Component Health")
         
         components = [
-            ("Input Guardrails", "✅ Active"),
-            ("Output Guardrails", "✅ Active"),
-            ("Knowledge Base", "✅ Active"),
-            ("Web Search", "✅ Active"),
-            ("Math Solver", "✅ Active"),
-            ("Feedback Processor", "✅ Active")
+            ("Input Guardrails", "Active"),
+            ("Output Guardrails", "Active"),
+            ("Knowledge Base", "Active"),
+            ("Web Search", "Active"),
+            ("Math Solver", "Active"),
+            ("Feedback Processor", "Active")
         ]
         
         for component, status in components:
