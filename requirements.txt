@@ -28,7 +28,7 @@ colorama==0.4.6
 coloredlogs==15.0.1
 colorlog==6.9.0
 comm==0.2.2
-crewai==0.121.1
+
 cryptography==45.0.5
 datasets==3.6.0
 debugpy==1.8.14
