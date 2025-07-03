@@ -1,0 +1,8 @@
+.env
+venv/
+myenv/
+__pycache__/
+src/guardrails/__pycache__
+src/knowledge_base/__pycache__
+src/web_search/__pycache__
+src/solvers/__pycache__
