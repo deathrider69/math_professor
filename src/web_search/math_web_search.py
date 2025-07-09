@@ -106,7 +106,7 @@ class MathWebSearchComponent:
     
     def _perform_search(self, query: str) -> Optional[Dict[str, Any]]:
         """
-        Perform the actual search using Tavily Client
+        Perform the actual search using Tavily Client with improved error handling
         
         Args:
             query (str): Search query
@@ -115,6 +115,11 @@ class MathWebSearchComponent:
             Optional[Dict]: Search results or None if failed
         """
         try:
+            # Check if Tavily API key is available
+            if not os.getenv("TAVILY_API_KEY"):
+                print("Tavily API key not found. Web search unavailable.")
+                return None
+            
             response = self.client.search(
                 query=query,
                 search_depth="advanced",
@@ -135,7 +140,16 @@ class MathWebSearchComponent:
             return response
                 
         except Exception as e:
-            print(f"Search request failed: {str(e)}")
+            error_msg = str(e)
+            if "502" in error_msg:
+                print(f"Tavily API temporarily unavailable (502 Bad Gateway). Web search will be skipped.")
+            elif "404" in error_msg:
+                print(f"Tavily API endpoint not found (404). Please check API configuration.")
+            elif "401" in error_msg or "403" in error_msg:
+                print(f"Tavily API authentication failed. Please check your API key.")
+            else:
+                print(f"Search request failed: {error_msg}")
+            
             return None
     
     def _extract_math_content(self, search_results: Dict[str, Any]) -> str:

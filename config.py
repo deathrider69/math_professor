@@ -2,11 +2,29 @@ import os
 from typing import Dict, Any
 
 class MathAgentConfig:
-    """Configuration class for Math Agent system"""
+    """Configuration class for Math Agent system with LangGraph and DSPy"""
     
     # API Configuration
     DEEPSEEK_API_KEY = os.getenv("DEEPSEEK_API_KEY", "")
-    SEARCH_API_KEY = os.getenv("SEARCH_API_KEY", "")
+    GEMINI_API_KEY = os.getenv("GEMINI_API_KEY", "")
+    TAVILY_API_KEY = os.getenv("TAVILY_API_KEY", "")
+    NIM_API_KEY = os.getenv("NIM_API_KEY", "")
+    
+    # LangGraph Configuration
+    LANGGRAPH_CONFIG = {
+        "checkpointer": "memory",
+        "thread_config": {"configurable": {"thread_id": "default"}},
+        "max_iterations": 10,
+        "debug": False
+    }
+    
+    # DSPy Configuration  
+    DSPY_CONFIG = {
+        "model": "gemini/gemini-2.0-flash",  # LiteLLM format for Gemini
+        "max_tokens": 4096,
+        "temperature": 0.3,
+        "top_p": 0.9
+    }
     
     # Model Configuration
     DEFAULT_MODEL = "deepseek-chat"
@@ -25,6 +43,7 @@ class MathAgentConfig:
     # Feedback Configuration
     FEEDBACK_CONFIDENCE_THRESHOLD = 0.6
     MAX_FEEDBACK_ITERATIONS = 3
+    DSPY_FEEDBACK_ENABLED = True
     
     # Guardrails Configuration
     INPUT_MAX_LENGTH = 2000
@@ -52,21 +71,40 @@ class MathAgentConfig:
     @classmethod
     def get_dspy_config(cls) -> Dict[str, Any]:
         """Get DSPy configuration"""
-        return {
-            "max_tokens": cls.MAX_TOKENS,
-            "temperature": cls.TEMPERATURE,
-            "model": cls.DEFAULT_MODEL
-        }
+        return cls.DSPY_CONFIG
     
     @classmethod
-    def validate_config(cls) -> bool:
+    def get_langgraph_config(cls) -> Dict[str, Any]:
+        """Get LangGraph configuration"""
+        return cls.LANGGRAPH_CONFIG
+    
+    @classmethod
+    def validate_config(cls) -> Dict[str, bool]:
         """Validate configuration settings"""
-        required_vars = []
+        validation_results = {}
         
-        missing_vars = [var for var in required_vars if not getattr(cls, var)]
+        # Check required API keys
+        validation_results["gemini_api_key"] = bool(cls.GEMINI_API_KEY)
+        validation_results["nim_api_key"] = bool(cls.NIM_API_KEY)
+        validation_results["tavily_api_key"] = bool(cls.TAVILY_API_KEY)
         
-        if missing_vars:
-            print(f"Warning: Missing configuration variables: {missing_vars}")
-            return False
+        # Check optional configurations
+        validation_results["dspy_feedback"] = cls.DSPY_FEEDBACK_ENABLED and bool(cls.GEMINI_API_KEY)
+        validation_results["langgraph_workflow"] = True  # Always available
         
-        return True
+        return validation_results
+    
+    @classmethod
+    def get_missing_requirements(cls) -> list:
+        """Get list of missing requirements"""
+        validation = cls.validate_config()
+        missing = []
+        
+        if not validation["gemini_api_key"]:
+            missing.append("GEMINI_API_KEY (required for DSPy feedback)")
+        if not validation["nim_api_key"]:
+            missing.append("NIM_API_KEY (required for DeepSeek solver)")
+        if not validation["tavily_api_key"]:
+            missing.append("TAVILY_API_KEY (required for web search)")
+        
+        return missing

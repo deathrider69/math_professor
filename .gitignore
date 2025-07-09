@@ -6,3 +6,10 @@ src/guardrails/__pycache__
 src/knowledge_base/__pycache__
 src/web_search/__pycache__
 src/solvers/__pycache__
+
+aimo_vectordb/chroma.sqlite3
+
+test_dspy_fix.py
+test_langgraph_system.py
+test_tavily_resilience.py
+
