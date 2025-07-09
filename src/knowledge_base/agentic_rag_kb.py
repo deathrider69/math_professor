@@ -12,7 +12,7 @@ get_status():
 output: dict - contains
     - is_initialized: bool - whether the knowledge base is initialized
     - total_problems: int - number of problems in the knowledge base
-    - similarity_threshold: float - current similarity threshold
+    - similarity_threshold: float - current similarity threshold (set to 0.7)
     - collection_name: str - name of the ChromaDB collection
     - embedding_model: str - name of the embedding model used
 """
@@ -47,9 +47,9 @@ class AIMOKnowledgeBaseComponent:
                  similarity_threshold: float = 0.7,
                  embedding_model: str = "all-MiniLM-L6-v2"):
         """
-        Initialize the knowledge base component.
+        initialize the knowledge base component
         
-        Args:
+        args:
             collection_name: Name of the ChromaDB collection
             db_path: Path to store the vector database
             similarity_threshold: Minimum similarity score to consider a match
@@ -61,14 +61,11 @@ class AIMOKnowledgeBaseComponent:
         self.is_initialized = False
         
         try:
-            # Initialize embedding model
             self.embedding_model = SentenceTransformer(embedding_model)
             logger.info(f"Loaded embedding model: {embedding_model}")
             
-            # Initialize ChromaDB client
             self.client = chromadb.PersistentClient(path=db_path)
             
-            # Try to get existing collection or create new one
             self.collection = self.client.get_or_create_collection(
                 name=collection_name,
                 metadata={"description": "AIMO mathematical problems and solutions"}
@@ -97,7 +94,6 @@ class AIMOKnowledgeBaseComponent:
             bool: True if successful, False otherwise
         """
         try:
-            # Load dataset
             logger.info("Loading AIMO dataset...")
             if dataset_path and os.path.exists(dataset_path):
                 df = pd.read_parquet(dataset_path)
@@ -106,7 +102,6 @@ class AIMOKnowledgeBaseComponent:
             
             logger.info(f"Loaded {len(df)} problems from dataset")
             
-            # Build knowledge base
             self._build_vector_database(df)
             self.is_initialized = True
             
@@ -135,7 +130,6 @@ class AIMOKnowledgeBaseComponent:
             }
         
         try:
-            # Search for similar problems
             similar_problems = self._search_similar_problems(question, n_results=3)
             
             if not similar_problems:
@@ -145,7 +139,6 @@ class AIMOKnowledgeBaseComponent:
                     "answer": ""
                 }
             
-            # Check if best match meets threshold
             best_match = similar_problems[0]
             
             if best_match['similarity_score'] < self.similarity_threshold:
@@ -155,7 +148,6 @@ class AIMOKnowledgeBaseComponent:
                     "answer": ""
                 }
             
-            # Generate solution based on best match
             solution = self._generate_solution(question, best_match)
             
             return {
@@ -181,21 +173,17 @@ class AIMOKnowledgeBaseComponent:
         """
         logger.info("Building vector database...")
         
-        # Prepare data for vectorization
         documents = []
         metadatas = []
         ids = []
         
         for idx, row in df.iterrows():
             try:
-                # Clean and prepare problem text
                 problem = self._clean_text(str(row['problem']))
                 solution = self._clean_text(str(row['solution']))
                 
-                # Create document for embedding (problem + solution context)
                 document_text = f"Problem: {problem}\n\nSolution Context: {solution[:300]}..."
-                
-                # Create metadata
+
                 metadata = {
                     "original_id": str(row['id']),
                     "problem": problem,
@@ -214,7 +202,6 @@ class AIMOKnowledgeBaseComponent:
                 logger.warning(f"Error processing row {idx}: {e}")
                 continue
         
-        # Create embeddings in batches
         logger.info(f"Creating embeddings for {len(documents)} documents...")
         batch_size = 100
         all_embeddings = []
@@ -250,13 +237,12 @@ class AIMOKnowledgeBaseComponent:
             # Create embedding for query
             query_embedding = self.embedding_model.encode([query])
             
-            # Search in ChromaDB
+            # searching in chromaDB
             results = self.collection.query(
                 query_embeddings=query_embedding.tolist(),
                 n_results=n_results
             )
             
-            # Format results with similarity scores
             similar_problems = []
             for i in range(len(results['documents'][0])):
                 similarity_score = 1 - results['distances'][0][i]  # Convert distance to similarity
@@ -291,10 +277,8 @@ class AIMOKnowledgeBaseComponent:
             Formatted step-by-step solution
         """
         try:
-            # Extract solution steps
             solution_steps = self._extract_solution_steps(best_match['solution'])
             
-            # Format the solution
             formatted_solution = f"""**Problem Type:** {best_match['problem_type'].title()}
 **Difficulty Level:** {best_match['difficulty'].title()}
 **Similarity Score:** {best_match['similarity_score']:.2f}
@@ -329,10 +313,8 @@ class AIMOKnowledgeBaseComponent:
         Returns:
             Formatted solution steps
         """
-        # Remove excessive whitespace and clean up
         solution = re.sub(r'\s+', ' ', solution.strip())
         
-        # Split into logical steps
         steps = []
         
         # Look for natural break points and step indicators

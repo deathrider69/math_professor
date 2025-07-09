@@ -51,7 +51,7 @@ class MathProblemSolver:
                 - calculated (bool): True if successfully calculated, False otherwise
         """
         try:
-            # Enhanced prompt for better structured output
+            # prompt enhancement
             enhanced_prompt = f"""
             Solve the following math problem step by step. Please provide:
             1. A clear step-by-step solution
@@ -135,10 +135,7 @@ class MathProblemSolver:
             tuple: (solution, answer, calculated)
         """
         try:
-            # Clean up the response
             response = response.strip()
-            
-            # Try to find the final answer using various patterns
             answer_patterns = [
                 r'final answer[:\s]*([+-]?\d*\.?\d+)',
                 r'answer[:\s]*([+-]?\d*\.?\d+)',
@@ -154,20 +151,17 @@ class MathProblemSolver:
             for pattern in answer_patterns:
                 matches = re.findall(pattern, response, re.IGNORECASE | re.MULTILINE)
                 if matches:
-                    # Get the last match (usually the final answer)
                     answer = matches[-1]
                     calculated = True
                     break
             
             # If no numerical answer found, try to extract from the end of response
             if not calculated:
-                # Look for numbers at the end of the response
                 numbers = re.findall(r'([+-]?\d*\.?\d+)', response)
                 if numbers:
                     answer = numbers[-1]
                     calculated = True
             
-            # The solution is the entire response
             solution = response
             
             return solution, answer, calculated

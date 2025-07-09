@@ -17,7 +17,7 @@ class MathInputGuardrails:
     """Input guardrails component for math solving agent."""
     
     def __init__(self):
-        # Math-related keywords and patterns
+        
         self.math_keywords = {
             'arithmetic': ['add', 'subtract', 'multiply', 'divide', 'sum', 'difference', 'product', 'quotient'],
             'algebra': ['solve', 'equation', 'variable', 'expression', 'polynomial', 'factor', 'expand'],

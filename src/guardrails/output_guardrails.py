@@ -8,7 +8,6 @@ import re
 
 class MathOutputGuardrails:
     def __init__(self):
-        # Patterns to remove harmful scripts and tags
         self.harmful_patterns = [
             r'<script[^>]*>.*?</script>',
             r'javascript:',
@@ -27,20 +26,15 @@ class MathOutputGuardrails:
             r'<embed[^>]*>.*?</embed>',
             r'<object[^>]*>.*?</object>'
         ]
-
-        # Tags to strip completely (like <think> ... </think>)
         self.strip_tags = ['think']
 
     def filter_harmful_content(self, text: str) -> str:
-        # Remove harmful patterns
         for pattern in self.harmful_patterns:
             text = re.sub(pattern, '[FILTERED]', text, flags=re.IGNORECASE | re.DOTALL)
 
-        # Remove custom tags like <think>...</think> completely but keep inner text
+        
         for tag in self.strip_tags:
-            # Replace opening tag
             text = re.sub(fr'<{tag}[^>]*>', '', text, flags=re.IGNORECASE)
-            # Replace closing tag
             text = re.sub(fr'</{tag}>', '', text, flags=re.IGNORECASE)
         
         return text
@@ -50,12 +44,8 @@ class MathOutputGuardrails:
         Main method: filters harmful content but leaves LaTeX and markdown intact for Streamlit.
         """
         cleaned = self.filter_harmful_content(raw_output)
-
-        # Optional: normalize line endings and multiple blank lines for neatness
-        cleaned = re.sub(r'\r\n?', '\n', cleaned)  # Normalize Windows line endings to \n
-        cleaned = re.sub(r'\n{3,}', '\n\n', cleaned)  # No more than 2 consecutive line breaks
-
-        # Strip trailing and leading whitespace on each line
+        cleaned = re.sub(r'\r\n?', '\n', cleaned)
+        cleaned = re.sub(r'\n{3,}', '\n\n', cleaned)
         cleaned = '\n'.join(line.strip() for line in cleaned.split('\n'))
 
         return cleaned
